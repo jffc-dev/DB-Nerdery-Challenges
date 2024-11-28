@@ -1,0 +1,150 @@
+-- Your answers here:
+-- 1
+
+SELECT A.type,
+       SUM(mount)
+FROM accounts A
+GROUP BY A.type;
+
+-- 2
+
+SELECT COUNT(*)
+FROM
+  (SELECT A.user_id
+   FROM accounts A
+   WHERE A.type = 'CURRENT_ACCOUNT'
+   GROUP BY A.user_id
+   HAVING COUNT(A.account_id) >= 2) user_ids;
+
+-- 3
+
+SELECT *
+FROM accounts A
+ORDER BY mount DESC
+LIMIT 5;
+
+-- 4
+-- Using a main query and subqueries
+SELECT user_id,
+       SUM(mount + coalesce(f.total, 0) + coalesce(t.total, 0))
+FROM accounts A
+LEFT JOIN
+  (SELECT account_from,
+          SUM(CASE
+                  WHEN TYPE = 'IN'
+                       OR TYPE = 'OTHER' THEN mount
+                  WHEN TYPE = 'OUT'
+                       OR TYPE = 'TRANSFER' THEN mount * -1
+              END) AS total
+   FROM movements
+   GROUP BY account_from
+   ORDER BY 1) F ON A.id = F.account_from
+LEFT JOIN
+  (SELECT account_to,
+          SUM(MOUNT) AS total
+   FROM movements
+   WHERE account_to IS NOT NULL
+   GROUP BY account_to
+   ORDER BY 1) T ON A.id = T.account_to
+GROUP BY user_id
+ORDER BY 2 DESC
+LIMIT 3;
+
+
+--Using a function that returns the balance of an account
+CREATE OR REPLACE FUNCTION getCurrentAmount(accountId UUID) RETURNS NUMERIC LANGUAGE PLPGSQL AS $$
+DECLARE
+    total NUMERIC;
+begin
+    SELECT
+        mount + COALESCE(f.total, 0) + COALESCE(t.total, 0) AS total into total
+    FROM accounts A
+    LEFT JOIN (
+        SELECT
+            account_from,
+            SUM(CASE
+                WHEN type = 'IN' THEN mount
+                WHEN type = 'OUT' OR type = 'TRANSFER' OR type = 'OTHER' THEN mount * -1
+            END) AS total
+        FROM movements
+        GROUP BY account_from
+    ) F ON A.id = F.account_from
+    LEFT JOIN (
+        SELECT
+            account_to,
+            SUM(mount) AS total
+        FROM movements
+        WHERE account_to IS NOT NULL
+        GROUP BY account_to
+    ) T ON A.id = T.account_to
+    WHERE A.id = accountId;
+
+    return total;
+end;
+$$;
+
+
+SELECT u.name,
+       SUM(getCurrentAmount(A.id))
+FROM users U
+INNER JOIN accounts A ON U.id = A.user_id
+GROUP BY user_id,
+         u.name
+ORDER BY 2 DESC
+LIMIT 3;
+
+-- 5
+
+CREATE OR REPLACE PROCEDURE generateMovement(fromAccount UUID, toAccount UUID DEFAULT NULL, typeTransaction type_movement, mountTransaction NUMERIC) LANGUAGE PLPGSQL AS $$
+DECLARE
+    fromTotal NUMERIC;
+    toTotal NUMERIC;
+BEGIN
+    SELECT getCurrentAmount(fromAccount) INTO fromTotal;
+    SELECT getCurrentAmount(toAccount) INTO toTotal;
+
+    RAISE NOTICE 'fromTotal: %', fromTotal;
+    RAISE NOTICE 'toTotal: %', toTotal;
+
+    -- Verifying
+    IF fromTotal < mountTransaction THEN
+        RAISE EXCEPTION 'Insufficient funds in account %', fromAccount;
+    ELSE
+        INSERT INTO movements (
+            id, type, account_from, account_to, mount, created_at, updated_at
+        ) VALUES (
+            gen_random_uuid(), typeTransaction, fromAccount, toAccount, mountTransaction, current_timestamp, current_timestamp
+        );
+    END IF;
+
+END;
+$$;
+
+-- 6
+
+SELECT U.*,
+       M.*
+FROM accounts A
+INNER JOIN users U ON A.user_id = U.id
+LEFT JOIN movements M ON A.id = M.account_from
+OR A.id = M.account_to
+WHERE A.id = '3b79e403-c788-495a-a8ca-86ad7643afaf';
+
+-- 7
+
+SELECT U.name,
+       U.email
+FROM users U
+WHERE U.id =
+    (SELECT u.id
+     FROM users U
+     INNER JOIN accounts A ON U.id = A.user_id
+     GROUP BY u.id
+     ORDER BY SUM(getCurrentAmount(A.id)) DESC
+     LIMIT 1) -- 8
+
+  SELECT M.*
+  FROM users U
+  INNER JOIN accounts A ON U.id = A.user_id
+  INNER JOIN movements M ON A.id = M.account_from
+  OR A.id = M.account_to WHERE u.email = 'Kaden.Gusikowski@gmail.com';
