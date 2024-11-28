@@ -2,16 +2,16 @@
 -- 1
 
 SELECT A.type,
-       SUM(mount)
+       SUM(mount) AS total
 FROM accounts A
 GROUP BY A.type;
 
 -- 2
 
-SELECT COUNT(*)
+SELECT COUNT(*) AS count
 FROM
   (SELECT A.user_id
-   FROM accounts A
+   FROM accounts AS A
    WHERE A.type = 'CURRENT_ACCOUNT'
    GROUP BY A.user_id
    HAVING COUNT(A.account_id) >= 2) user_ids;
@@ -94,12 +94,13 @@ ORDER BY 2 DESC
 LIMIT 3;
 
 -- 5
-
-CREATE OR REPLACE PROCEDURE generateMovement(fromAccount UUID, toAccount UUID DEFAULT NULL, typeTransaction type_movement, mountTransaction NUMERIC) LANGUAGE PLPGSQL AS $$
+-- Using a store procedure that simulates a movement
+CREATE OR REPLACE PROCEDURE generateMovement(typeTransaction type_movement, mountTransaction NUMERIC, fromAccount UUID, toAccount UUID DEFAULT NULL) LANGUAGE PLPGSQL AS $$
 DECLARE
     fromTotal NUMERIC;
     toTotal NUMERIC;
 BEGIN
+    -- Get current balance
     SELECT getCurrentAmount(fromAccount) INTO fromTotal;
     SELECT getCurrentAmount(toAccount) INTO toTotal;
 
@@ -108,6 +109,7 @@ BEGIN
 
     -- Verifying
     IF fromTotal < mountTransaction THEN
+        ROLLBACK;
         RAISE EXCEPTION 'Insufficient funds in account %', fromAccount;
     ELSE
         INSERT INTO movements (
@@ -115,6 +117,7 @@ BEGIN
         ) VALUES (
             gen_random_uuid(), typeTransaction, fromAccount, toAccount, mountTransaction, current_timestamp, current_timestamp
         );
+        COMMIT;
     END IF;
 
 END;
@@ -141,10 +144,13 @@ WHERE U.id =
      INNER JOIN accounts A ON U.id = A.user_id
      GROUP BY u.id
      ORDER BY SUM(getCurrentAmount(A.id)) DESC
-     LIMIT 1) -- 8
+     LIMIT 1) 
+     
+-- 8
 
-  SELECT M.*
-  FROM users U
-  INNER JOIN accounts A ON U.id = A.user_id
-  INNER JOIN movements M ON A.id = M.account_from
-  OR A.id = M.account_to WHERE u.email = 'Kaden.Gusikowski@gmail.com';
+SELECT M.*
+FROM users U
+INNER JOIN accounts A ON U.id = A.user_id
+INNER JOIN movements M ON A.id = M.account_from
+OR A.id = M.account_to
+WHERE u.email = 'Kaden.Gusikowski@gmail.com';
