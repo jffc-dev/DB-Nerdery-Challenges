@@ -59,7 +59,11 @@ CREATE TABLE customer_user (
   verificated_at TIMESTAMP(3) WITHOUT TIME ZONE,
   created_at TIMESTAMP(3) WITHOUT TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP(3) WITHOUT TIME ZONE DEFAULT NOW(),
-  last_login_at TIMESTAMP(3) WITHOUT TIME ZONE
+  last_login_at TIMESTAMP(3) WITHOUT TIME ZONE,
+  verification_token TEXT,
+  verification_expires_at TIMESTAMP,
+  reset_password_token TEXT,
+  reset_password_expires_at TIMESTAMP
 );
 
 CREATE TABLE role (
@@ -119,4 +123,12 @@ CREATE TABLE notification (
   created_at TIMESTAMP DEFAULT NOW(),
   send_at TIMESTAMP,
   read_at TIMESTAMP
+);
+
+CREATE TABLE entry (
+  id SERIAL PRIMARY KEY,
+  product_id INT REFERENCES product(product_id),
+  quantity INT NOT NULL CHECK (quantity > 0),
+  created_at TIMESTAMP DEFAULT NOW(),
+  created_by INT REFERENCES customer_user(user_id),
 );
