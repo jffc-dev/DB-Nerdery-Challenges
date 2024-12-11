@@ -31,7 +31,8 @@ SELECT S.ID, CONCAT(S.first_name, ' ', S.last_name) AS full_name,
 FROM employees AS E
 INNER JOIN employees AS S ON E.supervisor_id = S.id
 GROUP BY S.id, S.first_name, S.last_name
-ORDER BY count DESC;
+ORDER BY count DESC
+LIMIT 3;
 
 -- 5
 SELECT count(*) AS count
