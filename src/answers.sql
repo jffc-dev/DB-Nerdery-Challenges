@@ -61,7 +61,7 @@ FROM
    GROUP BY O.id,
             O.name
    ORDER BY count
-   LIMIT 1) AS Lowest
+   LIMIT 1) AS employe_lowest_salary
 UNION
 SELECT *
 FROM
@@ -72,7 +72,7 @@ FROM
    GROUP BY O.id,
             O.name
    ORDER BY count DESC
-   LIMIT 1) AS Highest;
+   LIMIT 1) AS employe_highest_salary;
 
 -- 8
 SELECT E.uuid,

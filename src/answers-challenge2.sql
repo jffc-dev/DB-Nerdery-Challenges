@@ -26,28 +26,27 @@ LIMIT 5;
 -- 4
 -- Using a main query and subqueries
 SELECT user_id,
-       SUM(mount + coalesce(f.total, 0) + coalesce(t.total, 0))
+       SUM(mount + COALESCE(f.total, 0) + COALESCE(t.total, 0)) AS total
 FROM accounts A
 LEFT JOIN
   (SELECT account_from,
           SUM(CASE
-                  WHEN TYPE = 'IN'
-                       OR TYPE = 'OTHER' THEN mount
-                  WHEN TYPE = 'OUT'
-                       OR TYPE = 'TRANSFER' THEN mount * -1
+                  WHEN type = 'IN' THEN mount
+                  WHEN type = 'OUT'
+                       OR type = 'TRANSFER' OR type = 'OTHER' THEN mount * -1
               END) AS total
    FROM movements
    GROUP BY account_from
-   ORDER BY 1) F ON A.id = F.account_from
+   ) F ON A.id = F.account_from
 LEFT JOIN
   (SELECT account_to,
           SUM(MOUNT) AS total
    FROM movements
    WHERE account_to IS NOT NULL
    GROUP BY account_to
-   ORDER BY 1) T ON A.id = T.account_to
+   ) T ON A.id = T.account_to
 GROUP BY user_id
-ORDER BY 2 DESC
+ORDER BY total DESC
 LIMIT 3;
 
 
@@ -57,7 +56,7 @@ DECLARE
     total NUMERIC;
 begin
     SELECT
-        mount + COALESCE(f.total, 0) + COALESCE(t.total, 0) AS total into total
+        mount + COALESCE(balance_accounts_from.total, 0) + COALESCE(balance_accounts_to.total, 0) AS total INTO total
     FROM accounts A
     LEFT JOIN (
         SELECT
@@ -68,7 +67,7 @@ begin
             END) AS total
         FROM movements
         GROUP BY account_from
-    ) F ON A.id = F.account_from
+    ) balance_accounts_from ON A.id = balance_accounts_from.account_from
     LEFT JOIN (
         SELECT
             account_to,
@@ -76,7 +75,7 @@ begin
         FROM movements
         WHERE account_to IS NOT NULL
         GROUP BY account_to
-    ) T ON A.id = T.account_to
+    ) balance_accounts_to ON A.id = balance_accounts_to.account_to
     WHERE A.id = accountId;
 
     return total;
@@ -85,12 +84,12 @@ $$;
 
 
 SELECT u.name,
-       SUM(getCurrentAmount(A.id))
+       SUM(getCurrentAmount(A.id)) AS amount
 FROM users U
 INNER JOIN accounts A ON U.id = A.user_id
 GROUP BY user_id,
          u.name
-ORDER BY 2 DESC
+ORDER BY amount DESC
 LIMIT 3;
 
 -- 5
